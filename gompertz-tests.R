@@ -65,7 +65,11 @@ fun_haz_cs1 <- function(t, x, params, type = "hazard") {
   }
 
  integral_denom <- integrate_to_t(fun = integral_fun_cs1, t = t)
-
+ if (type == "hazard") {
+   rate * exp(t * params[["base_shape"]])
+ } else { # type == "cumulative" for cumulative hazard
+   (rate / params[["base_shape"]]) * (exp(params[["base_shape"]] * t) - 1)
+ }
 
 }
 
@@ -74,8 +78,9 @@ plot(t, num)
 integral_denom <- integrate_to_t(fun = integral_fun_cs1, t = t)
 plot(t, integral_denom)
 haz_cs1 <- num / (1 - integral_denom)
-plot(t, -log((1 - integral_denom))) # cumhaz cs 1
+#plot(t, -log((1 - integral_denom))) # cumhaz cs 1
 plot(t, haz_cs1, ylim = c(-2, 2))
+#plot(t, -log(-integral_denom))
 
 plot(t, haz_subdist1, type = "l")
 lines(t, haz_cs2)
