@@ -161,5 +161,48 @@ coxph(Surv(timez, D) ~ X, data = dat[dat$timez != Inf, ])
 
 
 
+# Two FGs -----------------------------------------------------------------
 
-# Try simmings
+
+
+# Squeezing ---------------------------------------------------------------
+
+
+source("helpers.R")
+times <- seq(1e-6, 10, length.out = 100)
+
+params_squeeze <- list(
+  "cause1" = list(
+    "formula" = ~ X,
+    "betas" = c(1),
+    "p" = 0.3,
+    "base_rate" = 1,
+    "base_shape" = 0.75
+  ),
+  "cause2" = list(
+    "formula" = ~ X,
+    "betas" = c(1),
+    "base_rate" = 1,
+    "base_shape" = 0.75
+  )
+)
+
+df_base <- compute_true(
+  t = times,
+  newdat = cbind.data.frame(X = 0),
+  params = params_squeeze,
+  model_type = "correct_FG"
+)
+
+df_x1 <- compute_true(
+  t = times,
+  newdat = cbind.data.frame(X = 1),
+  params = params_squeeze,
+  model_type = "correct_FG"
+)
+
+# Better compute true funcs?
+# Should allow multiple patient, and give times directly in new dat
+
+# Possibly try numerical derivatives in R:
+# https://stackoverflow.com/questions/18494302/numerical-derivatives-of-an-arbitrarily-defined-function
