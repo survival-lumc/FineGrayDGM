@@ -21,7 +21,7 @@ params <- list(
     "formula" = ~ X,
     "betas" = c(0.5),
     "base_rate" = 1,
-    "base_shape" = 1.5
+    "base_shape" = 1.5x
   )
 )
 
@@ -32,29 +32,36 @@ dat_squeeze <- compute_true(
   params = params
 )
 
-dat_squeeze[cause == 1]$cs_haz
-
 dat_squeeze_x1 <- compute_true(
   t = t,
   model_type = "squeezing",
   newdat = list("X" = 1),
   params = params
 )
-# HR
-plot(
-  t,
-  dat_squeeze_x1[cause == 2][["subdist_haz"]] / dat_squeeze[cause == 2][["subdist_haz"]]
-)
 
-melt(
-  data = dat_squeeze,
-  id.vars = c("time", "cause"),
-  variable.name = "what",
-  value.name = "value"
-) |>
+
+dat_p <- rbind(dat_squeeze, dat_squeeze_x1, idcol = "X")
+dat_p[, X := factor(X, labels = c(0, 1))]
+
+dat_p_long <- dat_p |>
+  melt(
+    id.vars = c("time", "cause", "X"),
+    variable.name = "what",
+    value.name = "value"
+  )
+
+dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")] |>
+  ggplot(aes(time, ratio, col = what)) +
+  geom_line(linewidth = 1.5, aes(linetype = what)) +
+  facet_wrap(~ cause, scales = "free") +
+  scale_color_manual(values = Manu::get_pal("Kakariki"))
+
+# Baseline tings
+dat_p_long[X == 0] |>
   ggplot(aes(time, value, col = cause)) +
   geom_line(linewidth = 1.5, aes(linetype = cause)) +
-  facet_wrap(~ what, scales = "free")
+  facet_wrap(~ what, scales = "free") +
+  scale_color_manual(values = Manu::get_pal("Kakariki")[-1])
 
 
 # Reduction ---------------------------------------------------------------
@@ -71,8 +78,8 @@ params <- list(
   # This is weib
   "cause2" = list(
     "formula" = ~ X,
-    "betas" = c(0.5),
-    "base_rate" = 2,
+    "betas" = c(0.25),
+    "base_rate" = 1,
     "base_shape" = 0.5 # Could also use Weibs for cause 2
   )
 )
@@ -83,17 +90,36 @@ dat_reduction <- compute_true(
   newdat = newdat,
   params = params
 )
-dat_reduction[, .(max(cuminc)), by = cause][[2]] |> sum()
 
-melt(
-  data = dat_reduction,
-  id.vars = c("time", "cause"),
-  variable.name = "what",
-  value.name = "value"
-) |>
+dat_reduction_x1 <- compute_true(
+  t = t,
+  model_type = "reduction_factor",
+  newdat = list("X" = 1),
+  params = params
+)
+
+dat_p <- rbind(dat_reduction, dat_reduction_x1, idcol = "X")
+dat_p[, X := factor(X, labels = c(0, 1))]
+
+dat_p_long <- dat_p |>
+  melt(
+    id.vars = c("time", "cause", "X"),
+    variable.name = "what",
+    value.name = "value"
+  )
+
+dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")] |>
+  ggplot(aes(time, ratio, col = what)) +
+  geom_line(linewidth = 1.5, aes(linetype = what)) +
+  facet_wrap(~ cause, scales = "free") +
+  scale_color_manual(values = Manu::get_pal("Kakariki"))
+
+# Baseline tings
+dat_p_long[X == 0] |>
   ggplot(aes(time, value, col = cause)) +
   geom_line(linewidth = 1.5, aes(linetype = cause)) +
-  facet_wrap(~ what, scales = "free")
+  facet_wrap(~ what, scales = "free") +
+  scale_color_manual(values = Manu::get_pal("Kakariki")[-1])
 
 
 # Two FGs -----------------------------------------------------------------

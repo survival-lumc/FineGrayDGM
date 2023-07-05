@@ -196,25 +196,11 @@ compute_true <- function(t,
       cumhaz_cause1 <- integrate_to_t(t, get_cshaz_proper, cause = 1)
       cumhaz_cause2 <- integrate_to_t(t, get_cshaz_proper, cause = 2)
       haz * exp(-cumhaz_cause1 - cumhaz_cause2)
-      #exp(-cumhaz_cause1 - cumhaz_cause2) does not go to zero!!
     }
 
     # Calculate both cumulative incidences
     #F1_bis <- integrate_to_t(fun = prod, t = t, cause = 1)
     #F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
-
-
-
-    # Test things for cumhazard
-
-    # This shit does go to zero!!
-    #plot(
-    #  t,
-    #  exp(
-    #    - integrate_to_t(t, get_cshaz_proper, cause = 1) -
-    #      integrate_to_t(t, get_cshaz_proper, cause = 2)
-    #  )
-    #)
   }
 
   # Return everything; do long format?
