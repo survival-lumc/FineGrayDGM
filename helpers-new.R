@@ -92,18 +92,69 @@ compute_true <- function(t,
     rate_2 <- params[["cause2"]][["base_rate"]]
     F2 <- 1 - (1 - p2 * (1 - exp(-rate_2 * t^shape_2)))^hr_subdist2
 
+    subdens_1 <- hr_subdist1 * (1 - p1 + p1 * exp(-rate_1 * t^shape_1))^(hr_subdist1 - 1) *
+      p1 * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
+
+    subdens_2 <- hr_subdist2 * (1 - p2 + p2 * exp(-rate_2 * t^shape_2))^(hr_subdist2 - 1) *
+      p2 * exp(-rate_2 * t^shape_2) * rate_2 * shape_2 * t^(shape_2 - 1)
+
     get_subdisthaz_twofgs <- function(t, cause) {
       if (cause == 1) {
-        nom <- p1 * shape_1 * rate_1 * exp(-rate_1 * t^shape_1) * t^(shape_1 - 1) #baseline subdens
-        denom <- 1 - p1 * (1 - exp(-rate_1 * t^shape_1))
-        hr_subdist1 * nom / denom
+        subdens_1 / (1 - F1)
+      } else subdens_2 / (1 - F2)
+    }
+
+    get_cshaz_twofgs <- function(t, cause) { # use switch??
+      if (cause == 1) {
+        # Would reduction factor  work both ways?)
+        subdens_1 / (1 - F1 - F2) # check for floating point issues?
+      } else subdens_2 / (1 - F1 - F2)
+    }
+
+    haz_subdist1 <- get_subdisthaz_twofgs(t, cause = 1)
+    haz_subdist2 <- get_subdisthaz_twofgs(t, cause = 2)
+    haz_cs1 <- get_cshaz_twofgs(t, cause = 1)
+    haz_cs2 <- get_cshaz_twofgs(t, cause = 2)
+
+    get_cshaz_proper <- function(t, cause) {
+      subdens_1 <- hr_subdist1 * (1 - p1 + p1 * exp(-rate_1 * t^shape_1))^(hr_subdist1 - 1) *
+        p1 * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
+
+      subdens_2 <- hr_subdist2 * (1 - p2 + p2 * exp(-rate_2 * t^shape_2))^(hr_subdist2 - 1) *
+        p2 * exp(-rate_2 * t^shape_2) * rate_2 * shape_2 * t^(shape_2 - 1)
+
+      F1 <- 1 - (1 - p1 * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist1
+      F2 <- 1 - (1 - p2 * (1 - exp(-rate_2 * t^shape_2)))^hr_subdist2
+      if (cause == 1) {
+        # This is reduction factor (would it work both ways?)
+        subdens_1 / (1 - F1 - F2)
       } else {
-        nom <- p2 * shape_2 * rate_2 * exp(-rate_2 * t^shape_2) * t^(shape_2 - 1) #baseline subdens
-        denom <- 1 - p2 * (1 - exp(-rate_2 * t^shape_2)) # this I think is still ok even if in fraction
-        hr_subdist2 * nom / denom
+        subdens_2 / (1 - F1 - F2)
       }
     }
-    haz_subdist1 <- get_subdisthaz_twofgs(t, cause = 1) # maybe these subdist hazards are wrong
+
+    prod <- function(t, cause) {
+      haz <- switch(
+        cause,
+        "1" = get_cshaz_proper(t, cause = 1),
+        "2" = get_cshaz_proper(t, cause = 2)
+      )
+      cumhaz_cause1 <- integrate_to_t(t, get_cshaz_proper, cause = 1)
+      cumhaz_cause2 <- integrate_to_t(t, get_cshaz_proper, cause = 2)
+      haz * exp(-cumhaz_cause1 - cumhaz_cause2)
+    }
+
+    # Calculate both cumulative incidences
+    F1_bis <- integrate_to_t(fun = prod, t = t, cause = 1)
+    plot(t, F1)
+    lines(t, F1_bis)
+    F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
+    plot(t, F2)
+    lines(t, F2_bis)
+
+
+
+    haz_subdist1 <- get_subdisthaz_twofgs(t, cause = 1)
     haz_subdist2 <- get_subdisthaz_twofgs(t, cause = 2)
 
     tfp_suscep <- p1^hr_subdist1 + p2^hr_subdist2 # this is like 1
@@ -112,12 +163,13 @@ compute_true <- function(t,
     # p1^hr_subdist1 + p2^hr_subdist2 is max TFP??
     # I think it's CS hazards within the fraction?
     # See vertical model
-    #haz_cs1 <- 0 # for now
-   # haz_cs2 <- 0
+    haz_cs1 <- 0 # for now
+    haz_cs2 <- 0
 
     # Trying stuff
-    haz_cs1 <- haz_subdist1 * (tfp_suscep - F1) / (tfp_suscep - F1 - F2)
-    haz_cs2 <- haz_subdist2 * (tfp_suscep - F2) / (tfp_suscep - F1 - F2)
+    #haz_cs1 <- haz_subdist1 * (tfp_suscep - F1) / (tfp_suscep - F1 - F2)
+    #haz_cs2 <- haz_subdist2 * (tfp_suscep - F2) / (tfp_suscep - F1 - F2)
+
 
   } else if (model_type == "squeezing") {
 

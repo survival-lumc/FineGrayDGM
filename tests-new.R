@@ -21,7 +21,7 @@ params <- list(
     "formula" = ~ X,
     "betas" = c(0.5),
     "base_rate" = 1,
-    "base_shape" = 1.5x
+    "base_shape" = 1.5
   )
 )
 
@@ -148,6 +148,19 @@ dat_twofgs <- compute_true(
   newdat = newdat,
   params = params
 )
+
+dat_twofgs_x1 <- compute_true(
+  t = t,
+  model_type = "two_fgs",
+  newdat = list(X = 1),
+  params = params
+)
+
+plot(
+  t,
+  dat_twofgs_x1[cause == 2]$subdist_haz  / dat_twofgs[cause == 2]$subdist_haz
+)
+
 dat_twofgs[, .(max(cuminc)), by = cause]
 
 melt(
