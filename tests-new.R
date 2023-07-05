@@ -15,13 +15,13 @@ params <- list(
     "betas" = c(0.5),
     "p" = 0.2,
     "base_rate" = 1,
-    "base_shape" = 0.75
+    "base_shape" = 1.25
   ),
   "cause2" = list(
     "formula" = ~ X,
     "betas" = c(0.5),
     "base_rate" = 1,
-    "base_shape" = 0.75
+    "base_shape" = 1.5
   )
 )
 
@@ -31,6 +31,18 @@ dat_squeeze <- compute_true(
   newdat = newdat,
   params = params
 )
+
+dat_squeeze_x1 <- compute_true(
+  t = t,
+  model_type = "squeezing",
+  newdat = list("X" = 1),
+  params = params
+)
+plot(
+  t,
+  dat_squeeze_x1[cause == 2][["subdist_haz"]] / dat_squeeze[cause == 2][["subdist_haz"]]
+)
+
 melt(
   data = dat_squeeze,
   id.vars = c("time", "cause"),
@@ -53,11 +65,12 @@ params <- list(
     "base_rate" = 0.5,
     "base_shape" = -2
   ),
+  # This is weib
   "cause2" = list(
     "formula" = ~ X,
     "betas" = c(0.5),
-    "base_rate" = 0.5,
-    "base_shape" = -0.5 # Could also use Weibs for cause 2
+    "base_rate" = 2,
+    "base_shape" = 0.5 # Could also use Weibs for cause 2
   )
 )
 

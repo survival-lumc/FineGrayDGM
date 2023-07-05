@@ -44,13 +44,14 @@ compute_true <- function(t,
 
   if (model_type == "reduction_factor") {
 
-    haz_cs2 <- gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
+    #Try instead with Weib cause 2..
+    haz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
     haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
 
     integral_fun_cs1 <- function(t) {
       haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
       cumhaz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")
-      cumhaz_cs2 <- gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+      cumhaz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
       haz_subdist1 * exp(-cumhaz_subdist1 + cumhaz_cs2)
     }
     num <- integral_fun_cs1(t)
@@ -61,11 +62,12 @@ compute_true <- function(t,
       haz <- switch(
         cause,
         "1" = integral_fun_cs1(t) / (1 - integrate_to_t(fun = integral_fun_cs1, t = t)),
-        "2" = gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
+        "2" = weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
       )
       cumhaz_cause1 <- -log(1 - integrate_to_t(fun = integral_fun_cs1, t = t))
-      cumhaz_cause2 <- gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+      cumhaz_cause2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
       haz * exp(-cumhaz_cause1 - cumhaz_cause2)
+      #exp(-cumhaz_cause1 - cumhaz_cause2) does not go to zero!!
     }
 
     # Calculate both cumulative incidences
@@ -134,8 +136,30 @@ compute_true <- function(t,
     cumhaz_condit <- rate_2 * hr_condit * t^shape_2
     F2 <- (1 - exp(-cumhaz_condit)) * p2_inf
 
+    library(numDeriv)
+    #F2_fun <- function(t) {
+    #  (1 - exp(-rate_2 * hr_condit * t^shape_2)) * p2_inf
+    #}
+    #F2_fun(5)
+    #plot(t, grad(func = F2_fun, t))
+    #lines(t, subdens_2)
+
+    F1_fun <- function(t) {
+      1 - (1 - p * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist
+    }
+    #F1_fun(t)
+    #F1
+    plot(t, grad(func = F1_fun, t))
+    lines(t, {
+      hr_subdist * (1 - p + p * exp(-rate_1 * t^shape_1))^(hr_subdist - 1) *
+        p * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
+    })
+
     # Closure for subdistribution hazard in this mechanism
-    subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) * exp(-hr_condit * rate_2 * t^shape_2)
+    subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) *
+      exp(-hr_condit * rate_2 * t^shape_2) *
+      p2_inf # important
+
     get_subdisthaz_squeezing <- function(t, cause) {
       if (cause == 1) {
         nom <- p * shape_1 * rate_1 * exp(-rate_1 * t^shape_1) * t^(shape_1 - 1)
@@ -159,6 +183,50 @@ compute_true <- function(t,
     haz_subdist2 <- get_subdisthaz_squeezing(t, cause = 2)
     haz_cs1 <- get_cshaz_squeezing(t, cause = 1)
     haz_cs2 <- get_cshaz_squeezing(t, cause = 2)
+
+    # FOr testing
+    get_cshaz_proper <- function(t, cause) {
+      subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) *
+        exp(-hr_condit * rate_2 * t^shape_2) *
+        p2_inf
+      F1 <- 1 - (1 - p * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist
+      F2 <- (1 - exp(-rate_2 * hr_condit * t^shape_2)) * p2_inf
+      if (cause == 1) {
+        # This is reduction factor (would it work both ways?)
+        get_subdisthaz_squeezing(t, cause = 1) * (1 + F2 / (1 - F1 - F2)) # check for floating point issues?
+      } else {
+        subdens_2 * (1 - F1 - F2)
+      }
+    }
+
+    prod <- function(t, cause) {
+      haz <- switch(
+        cause,
+        "1" = get_cshaz_proper(t, cause = 1),
+        "2" = get_cshaz_proper(t, cause = 2)
+      )
+      cumhaz_cause1 <- integrate_to_t(t, get_cshaz_proper, cause = 1)
+      cumhaz_cause2 <- integrate_to_t(t, get_cshaz_proper, cause = 2)
+      haz * exp(-cumhaz_cause1 - cumhaz_cause2)
+      #exp(-cumhaz_cause1 - cumhaz_cause2) does not go to zero!!
+    }
+
+    # Calculate both cumulative incidences
+    F1_bis <- integrate_to_t(fun = prod, t = t, cause = 1)
+    F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
+
+
+
+    # Test things for cumhazard
+
+    # This shit does go to zero!!
+    #plot(
+    #  t,
+    #  exp(
+    #    - integrate_to_t(t, get_cshaz_proper, cause = 1) -
+    #      integrate_to_t(t, get_cshaz_proper, cause = 2)
+    #  )
+    #)
   }
 
   # Return everything; do long format?
@@ -178,3 +246,4 @@ compute_true <- function(t,
   )
   rbind(dat_ev1, dat_ev2)
 }
+
