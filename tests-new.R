@@ -32,12 +32,15 @@ dat_squeeze <- compute_true(
   params = params
 )
 
+dat_squeeze[cause == 1]$cs_haz
+
 dat_squeeze_x1 <- compute_true(
   t = t,
   model_type = "squeezing",
   newdat = list("X" = 1),
   params = params
 )
+# HR
 plot(
   t,
   dat_squeeze_x1[cause == 2][["subdist_haz"]] / dat_squeeze[cause == 2][["subdist_haz"]]

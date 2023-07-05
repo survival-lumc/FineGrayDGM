@@ -136,47 +136,33 @@ compute_true <- function(t,
     cumhaz_condit <- rate_2 * hr_condit * t^shape_2
     F2 <- (1 - exp(-cumhaz_condit)) * p2_inf
 
-    library(numDeriv)
-    #F2_fun <- function(t) {
-    #  (1 - exp(-rate_2 * hr_condit * t^shape_2)) * p2_inf
+    #library(numDeriv)
+    #F1_fun <- function(t) {
+    #  1 - (1 - p * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist
     #}
-    #F2_fun(5)
-    #plot(t, grad(func = F2_fun, t))
-    #lines(t, subdens_2)
+    #plot(t, grad(func = F1_fun, t))
 
-    F1_fun <- function(t) {
-      1 - (1 - p * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist
-    }
-    #F1_fun(t)
-    #F1
-    plot(t, grad(func = F1_fun, t))
-    lines(t, {
-      hr_subdist * (1 - p + p * exp(-rate_1 * t^shape_1))^(hr_subdist - 1) *
-        p * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
-    })
 
     # Closure for subdistribution hazard in this mechanism
+    subdens_1 <- hr_subdist * (1 - p + p * exp(-rate_1 * t^shape_1))^(hr_subdist - 1) *
+      p * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
+
     subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) *
       exp(-hr_condit * rate_2 * t^shape_2) *
       p2_inf # important
 
+    # Use switch!!
     get_subdisthaz_squeezing <- function(t, cause) {
       if (cause == 1) {
-        nom <- p * shape_1 * rate_1 * exp(-rate_1 * t^shape_1) * t^(shape_1 - 1)
-        denom <- 1 - p * (1 - exp(-rate_1 * t^shape_1))
-        hr_subdist * nom / denom
-      } else {
-        subdens_2 / (1 - F2)
-      }
+        subdens_1 / (1 - F1)
+      } else subdens_2 / (1 - F2)
     }
 
     get_cshaz_squeezing <- function(t, cause) { # use switch??
       if (cause == 1) {
-        # This is reduction factor (would it work both ways?)
-        get_subdisthaz_squeezing(t, cause = 1) * (1 + F2 / (1 - F1 - F2)) # check for floating point issues?
-      } else {
-        subdens_2 * (1 - F1 - F2)
-      }
+        # Would reduction factor  work both ways?)
+        subdens_1 / (1 - F1 - F2) # check for floating point issues?
+      } else subdens_2 / (1 - F1 - F2)
     }
 
     haz_subdist1 <- get_subdisthaz_squeezing(t, cause = 1)
@@ -186,6 +172,8 @@ compute_true <- function(t,
 
     # FOr testing
     get_cshaz_proper <- function(t, cause) {
+      subdens_1 <- hr_subdist * (1 - p + p * exp(-rate_1 * t^shape_1))^(hr_subdist - 1) *
+        p * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
       subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) *
         exp(-hr_condit * rate_2 * t^shape_2) *
         p2_inf
@@ -193,9 +181,9 @@ compute_true <- function(t,
       F2 <- (1 - exp(-rate_2 * hr_condit * t^shape_2)) * p2_inf
       if (cause == 1) {
         # This is reduction factor (would it work both ways?)
-        get_subdisthaz_squeezing(t, cause = 1) * (1 + F2 / (1 - F1 - F2)) # check for floating point issues?
+        subdens_1 / (1 - F1 - F2)
       } else {
-        subdens_2 * (1 - F1 - F2)
+        subdens_2 / (1 - F1 - F2)
       }
     }
 
@@ -212,8 +200,8 @@ compute_true <- function(t,
     }
 
     # Calculate both cumulative incidences
-    F1_bis <- integrate_to_t(fun = prod, t = t, cause = 1)
-    F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
+    #F1_bis <- integrate_to_t(fun = prod, t = t, cause = 1)
+    #F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
 
 
 
