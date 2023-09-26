@@ -1,10 +1,18 @@
 library(data.table)
 library(ggplot2)
-theme_set(theme_minimal(base_size = 15))
+library(Manu)
+library(patchwork)
+library(extrafont)
+theme_set(theme_minimal(base_size = 15, base_family = "Roboto Condensed"))
 source("helpers-new.R")
 
 newdat <- data.frame("X" = 0) # later with X = 1
-t <- seq(0.001, 10, by = 0.1)
+t <- seq(0.001, 10, length.out = 250)
+
+# Idea: make dot plot of event 1 times?? So we can see where most events; do
+# same for event two?
+# Is this the same as plotting the subdensity?
+# Plot it under the hazard ratio plots? conditional on X = 1
 
 # Squeezing ---------------------------------------------------------------
 
@@ -42,6 +50,7 @@ dat_squeeze_x1 <- compute_true(
 
 dat_p <- rbind(dat_squeeze, dat_squeeze_x1, idcol = "X")
 dat_p[, X := factor(X, labels = c(0, 1))]
+dat_p[, cause := factor(cause, levels = c(1, 2))]
 
 dat_p_long <- dat_p |>
   melt(
@@ -50,7 +59,9 @@ dat_p_long <- dat_p |>
     value.name = "value"
   )
 
-dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")] |>
+dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")][
+  what != "cuminc"
+] |>
   ggplot(aes(time, ratio, col = what)) +
   geom_line(linewidth = 1.5, aes(linetype = what)) +
   facet_wrap(~ cause, scales = "free") +
@@ -63,6 +74,126 @@ dat_p_long[X == 0] |>
   facet_wrap(~ what, scales = "free") +
   scale_color_manual(values = Manu::get_pal("Kakariki")[-1])
 
+
+#
+p_squeeze_subdist <- dat_p[X == 0] |>
+  #cs_haz
+  ggplot(aes(time, subdist_haz, col = cause, linetype = cause)) +
+  geom_line(linewidth = 1.25) +
+  coord_cartesian(ylim = c(0, 2.5), xlim = c(0, 10)) +
+  scale_color_manual(values = get_pal("Hoiho")[c(1, 2)]) +
+  #geom_hline(yintercept = 0, linetype = "dotted") +
+  labs(x = "Time", y = "Baseline subdistribution hazard",
+       col = "Cause", linetype = "Cause") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5))+
+  scale_linetype_manual(values = c(2, 1))
+
+p_squeeze_cs <- dat_p[X == 0] |>
+  #cs_haz
+  ggplot(aes(time, cs_haz, col = cause, linetype = cause)) +
+  geom_line(linewidth = 1.25) +
+  coord_cartesian(ylim = c(0, 2.5), xlim = c(0, 10)) +
+  scale_color_manual(values = get_pal("Hoiho")[c(1, 2)]) +
+  #geom_hline(yintercept = 0, linetype = "dotted") +
+  labs(x = "Time", y = "Baseline cause-specific hazard",
+       col = "Cause", linetype = "Cause") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5))+
+  scale_linetype_manual(values = c(2, 1))
+
+hr_dat <- dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")][
+  what != "cuminc"
+]
+
+p_squeeze_cshr <- hr_dat[what == "cs_haz"] |>
+  ggplot(aes(time, ratio, col = cause, linetype = cause)) +
+  geom_line(linewidth = 1.25) +
+  coord_cartesian(ylim = c(0, 3), xlim = c(0, 10)) +
+  scale_color_manual(values = get_pal("Hoiho")[c(1, 2)]) +
+  geom_hline(yintercept = 1, linetype = "dotted") +
+  labs(x = "Time", y = expression(h[k](t~'|'~X==1)~'/'~h[k](t~'|'~X==0)),
+       col = "Cause", linetype = "Cause") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5))+
+  scale_linetype_manual(values = c(2, 1))
+
+p_squeeze_subdisthr <- hr_dat[what == "subdist_haz"] |>
+  ggplot(aes(time, ratio, col = cause, linetype = cause)) +
+  geom_line(linewidth = 1.25) +
+  coord_cartesian(ylim = c(0, 3), xlim = c(0, 10)) +
+  scale_color_manual(values = get_pal("Hoiho")[c(1, 2)]) +
+  geom_hline(yintercept = 1, linetype = "dotted") +
+  labs(x = "Time", y = expression(lambda[k](t~'|'~X==1)~'/'~lambda[k](t~'|'~X==0)),
+       col = "Cause", linetype = "Cause") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
+  scale_linetype_manual(values = c(2, 1))
+
+
+combined <- (p_squeeze_cs + p_squeeze_cshr) /
+  (p_squeeze_subdist + p_squeeze_subdisthr) & theme(legend.position = "bottom")
+
+p_comb <- combined + plot_layout(guides = "collect")
+p_comb
+
+ggsave(
+  here::here("squeeze_fig.pdf"), # also to eps/tiff?
+  dpi = 300,
+  #scale = 1.8,
+  units = "in",
+  width = 8,
+  height = 8,
+  device = cairo_pdf
+)
+
+
+dat_p_bis <- copy(dat_p[X == 0]) #|>
+#dat_p_bis[, X := factor(X, levels = c(2, 1))]
+
+cuminc_squeeze <- dat_p_bis[cause == 1] |>
+  ggplot(aes(time, cuminc)) +
+  geom_area(fill = get_pal("Hoiho")[1], alpha = 0.5) +
+  geom_ribbon(
+    data = dat_p_bis[cause == 2],
+    aes(ymax = cuminc + params$cause1$p, ymin = params$cause1$p),
+    fill = get_pal("Hoiho")[2],
+    alpha = 0.5
+  ) +
+  coord_cartesian(ylim = c(0, 1.1), xlim = c(0, 11)) +
+  geom_segment(
+    y = params$cause1$p, yend = params$cause1$p, x = 0, xend = 10,
+    linetype = "dashed"
+  ) +
+  annotate("text", x = 10.5, y = params$cause1$p, parse = TRUE, label = "p",
+           family = "Roboto Condensed") +
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c(params$cause1$p, 1)),
+    label = as.character(expression(F[20](t))),
+    family = "Roboto Condensed",
+    parse = TRUE
+  ) +
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c(params$cause1$p, 0)),
+    label = as.character(expression(F[10](t))),
+    family = "Roboto Condensed",
+    parse = TRUE
+  ) +
+  labs(x = "Time", y = "Baseline cumulative incidence") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25))
+
+cuminc_squeeze / p_comb
+
+ggsave(
+  here::here("squeeze_fig.pdf"), # also to eps/tiff?
+  dpi = 300,
+  #scale = 1.8,
+  units = "in",
+  width = 8,
+  height = 11,
+  device = cairo_pdf
+)
 
 # Reduction ---------------------------------------------------------------
 
@@ -79,9 +210,17 @@ params <- list(
   "cause2" = list(
     "formula" = ~ X,
     "betas" = c(0.25),
-    "base_rate" = 1,
+    "base_rate" = 1.25,#1.25,
     "base_shape" = 0.5 # Could also use Weibs for cause 2
   )
+)
+
+plot(
+  seq(0.01, 10, by = 0.01),
+  1 - exp(0.5 * (exp(-2 * seq(0.01, 10, by = 0.01)) - 1) / 2),
+  type = "l",
+  xlim = c(0, 10),
+  ylim = c(0, 0.8)
 )
 
 dat_reduction <- compute_true(
@@ -108,18 +247,175 @@ dat_p_long <- dat_p |>
     value.name = "value"
   )
 
+# Baseline tings
+dat_p_long[X == 1] |>
+  ggplot(aes(time, value, col = cause)) +
+  geom_line(linewidth = 1.5, aes(linetype = cause)) +
+  facet_wrap(~ what, scales = "free") +
+  scale_color_manual(values = Manu::get_pal("Kakariki")[-1])
+
 dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")] |>
   ggplot(aes(time, ratio, col = what)) +
   geom_line(linewidth = 1.5, aes(linetype = what)) +
   facet_wrap(~ cause, scales = "free") +
   scale_color_manual(values = Manu::get_pal("Kakariki"))
 
-# Baseline tings
-dat_p_long[X == 0] |>
-  ggplot(aes(time, value, col = cause)) +
-  geom_line(linewidth = 1.5, aes(linetype = cause)) +
-  facet_wrap(~ what, scales = "free") +
-  scale_color_manual(values = Manu::get_pal("Kakariki")[-1])
+
+
+dat_p[X == 1][, .(sum(cuminc)), by = time]
+
+# Try similar plots
+dat_p[, TFP := sum(cuminc), by = c("X", "time")] #[X == 1][, .(tfp = sum(cuminc),), by = time]
+dat_p[, cause := factor(cause, levels = c(2, 1))]
+
+p_reduct_1 <- dat_p[X == 1 & TFP <= 1] |>
+  ggplot(aes(time, cuminc, fill = cause)) +
+  geom_area(alpha = 0.75) +
+  scale_fill_manual(values = get_pal("Hoiho")[c(2, 1)]) +
+  annotate(
+    "text",
+    x = 2,
+    y = mean(c((1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas)),
+               1)),
+    #label = "F[2](t*'|'*X)",
+    label = "F[2](t ~ '|' ~ X == 1)",
+    family = "Roboto Condensed",
+    parse = TRUE
+  )+
+  annotate(
+    "text",
+    x = 2,
+    y = mean(c(
+      0,
+      (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas))
+    )),
+    label = "F[1](t ~ '|' ~ X == 1)",
+    family = "Roboto Condensed",
+    parse = TRUE
+  ) +
+  coord_cartesian(ylim = c(0, 1.1), xlim = c(0, 10)) +
+  labs(x = "Time", y = "Cumulative incidence") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25)) +
+  theme(legend.position = "none")
+
+t_neg_haz <- min(dat_p[cs_haz < 0, "time"])
+dat_p[, grps := fcase(
+  time < t_neg_haz & X == 1 & cause == 1, 1,
+  time >= t_neg_haz & X == 1 & cause == 1, 2,
+  X == 1 & cause == 2, 0
+)]
+
+p_reduct_2 <- dat_p[X == 1] |>
+  ggplot(aes(time, cs_haz, col = cause, linetype = cause,
+             group = grps)) +
+  geom_line(linewidth = 1.25) +
+  coord_cartesian(ylim = c(-5, 5), xlim = c(0, 10)) +
+  scale_color_manual(values = get_pal("Hoiho")[c(2, 1)]) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  labs(x = "Time", y = "Cause-specific hazard",
+       col = "Cause", linetype = "Cause") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
+  geom_point(x = t_neg_haz, y = 0, size = 3, col = get_pal("Hoiho")[1]) +
+  annotate(
+    "text",
+    x = t_neg_haz + 0.5,
+    y = 1.25,
+    hjust = 0,
+    label = "h[1](t ~ '|' ~ X == 1) ~ 'undefined'",
+    family = "Roboto Condensed",
+    parse = TRUE
+  ) +
+  geom_curve(
+    aes(
+      x = t_neg_haz + 0.4,
+      y = 1.25,
+      xend = t_neg_haz,
+      yend = 0.1
+    ),
+    colour = "black",
+    linewidth = 0.25,
+    curvature = 0.3,
+    arrow = arrow(length = unit(0.02, "npc"), type = "open"),
+    inherit.aes = FALSE
+  )
+
+p_reduct_3 <- dat_p[X == 1] |>
+  ggplot(aes(time, subdist_haz, col = cause, linetype = cause,
+             group = grps)) +
+  geom_line(linewidth = 1.25) +
+  coord_cartesian(ylim = c(0, 2.5), xlim = c(0, 10)) +
+  scale_color_manual(values = get_pal("Hoiho")[c(2, 1)]) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  labs(x = "Time", y = "Subdistribution hazard",
+       col = "Cause", linetype = "Cause") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) #+
+  #geom_point(x = t_neg_haz, y = 0, size = 3, col = get_pal("Hoiho")[1]) +
+
+
+p_reduct_1 / p_reduct_2 / p_reduct_3 + plot_annotation(tag_levels = 'A')
+
+ggsave(
+  here::here("reduc_fig.pdf"), # also to eps/tiff?
+  dpi = 300,
+  #scale = 1.8,
+  units = "in",
+  width = 8,
+  height = 11,
+  device = cairo_pdf
+)
+
+ # guides(fill = guide_legend(reverse = TRUE))
+
+dat_p[cause == 1 & X == 1] |>
+  ggplot(aes(time, cuminc)) +
+  geom_area(fill = get_pal("Hoiho")[1], alpha = 0.5) +
+  geom_ribbon(
+    data = dat_p[cause == 2 & X == 1],
+    aes(
+      ymax = cuminc +
+        (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas)),
+      ymin = (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas))
+    ),
+    fill = get_pal("Hoiho")[2],
+    alpha = 0.5
+  ) +
+  coord_cartesian(ylim = c(0, 1.1), xlim = c(0, 11)) +
+  geom_segment(
+    y = (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas)),
+    yend = (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas)),
+    x = 0, xend = 10,
+    linetype = "dashed"
+  ) +
+  annotate("text", x = 10.5,
+           y = (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas)),
+           parse = TRUE,
+           label = "P(D==1 ~ '|' ~ X == 1)",
+           family = "Roboto Condensed") +
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c((1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas)),
+               1)),
+    #label = "F[2](t*'|'*X)",
+    label = "F[2](t ~ '|' ~ X)",
+    family = "Roboto Condensed",
+    parse = TRUE
+  )+
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c(
+      0,
+      (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas))
+    )),
+    label = "F[1](t ~ '|' ~ X)",
+    family = "Roboto Condensed",
+    parse = TRUE
+  ) +
+  labs(x = "Time", y = "Cumulative incidence") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25))
 
 
 # Two FGs -----------------------------------------------------------------
@@ -129,14 +425,14 @@ params <- list(
   "cause1" = list(
     "formula" = ~ X,
     "betas" = c(0.5),
-    "p" = 0.05,
+    "p" = 0.25,#0.05,
     "base_rate" = 1,
     "base_shape" = 0.75
   ),
   "cause2" = list(
     "formula" = ~ X,
     "betas" = c(0.5),
-    "p" = 0.1,
+    "p" = 0.5, #0.1,
     "base_rate" = 1,
     "base_shape" = 0.75
   )
@@ -156,15 +452,147 @@ dat_twofgs_x1 <- compute_true(
   params = params
 )
 
-plot(
-  t,
-  dat_twofgs_x1[cause == 2]$subdist_haz  / dat_twofgs[cause == 2]$subdist_haz
+p_x1 <- dat_twofgs[cause == 1] |>
+  ggplot(aes(time, cuminc)) +
+  geom_area(fill = get_pal("Hoiho")[1], alpha = 0.75) +
+  geom_ribbon(
+    data = dat_twofgs[cause == 2],
+    aes(ymax = cuminc + params$cause1$p, ymin = params$cause1$p),
+    fill = get_pal("Hoiho")[2],
+    alpha = 0.75
+  ) +
+  coord_cartesian(ylim = c(0, 1.1), xlim = c(0, 11)) +
+  geom_segment(
+    y = params$cause1$p, yend = params$cause1$p, x = 0, xend = 10,
+    linetype = "dashed"
+  ) +
+  geom_segment(
+    y = params$cause1$p + params$cause2$p,
+    yend = params$cause1$p + params$cause2$p, x = 0, xend = 10,
+    linetype = "dashed"
+  ) +
+  geom_ribbon(
+    aes(ymin = params$cause1$p + params$cause2$p,
+        ymax = 1),
+    alpha = 0.75,
+    fill = get_pal("Hoiho")[5]
+  ) +
+  annotate("text", x = 10.5, y = params$cause1$p, parse = TRUE, label = "p[10]",
+           family = "Roboto Condensed") +
+  annotate("text", x = 10.5, y = params$cause1$p + params$cause2$p,
+           parse = TRUE, label = "p[20]", family = "Roboto Condensed") +
+  annotate("text", x = 5, y = mean(c(1, params$cause1$p + params$cause2$p)),
+           label = "'Cured'", family = "Roboto Condensed") +
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c(params$cause1$p, params$cause1$p + params$cause2$p)),
+    label = as.character(expression(F[20](t))),
+    family = "Roboto Condensed",
+    parse = TRUE
+  ) +
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c(params$cause1$p, 0)),
+    label = as.character(expression(F[10](t))),
+    family = "Roboto Condensed",
+    parse = TRUE
+  ) +
+  labs(x = "Time", y = "Cumulative incidence") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25))
+
+p_x2 <-dat_twofgs_x1[cause == 1] |>
+  ggplot(aes(time, cuminc)) +
+  geom_area(fill = get_pal("Hoiho")[1], alpha = 0.75) +
+  geom_ribbon(
+    data = dat_twofgs_x1[cause == 2],
+    aes(
+      ymax = pmin(1, cuminc + 1 - (1 - params$cause1$p)^exp(params$cause1$betas)),
+      ymin = 1 - (1 - params$cause1$p)^exp(params$cause1$betas)
+    ),
+    fill = get_pal("Hoiho")[2],
+    alpha = 0.75
+  ) +
+  geom_ribbon(
+    data = dat_twofgs_x1[cause == 2],
+    aes(
+      ymax = pmax(1, cuminc + 1 - (1 - params$cause1$p)^exp(params$cause1$betas)),
+      ymin = 1
+    ),
+    fill = get_pal("Hoiho")[2],
+    alpha = 0.5
+  ) +
+  coord_cartesian(ylim = c(0, 1.1), xlim = c(0, 11)) +
+  geom_segment(
+    y = 1 - (1 - params$cause1$p)^exp(params$cause1$betas),
+    yend = 1 - (1 - params$cause1$p)^exp(params$cause1$betas), x = 0, xend = 10,
+    linetype = "dashed"
+  ) +
+  annotate("text", x = 10.5,
+           y = 1 - (1 - params$cause1$p)^exp(params$cause1$betas),
+           parse = TRUE, label = "p[1](x)",
+           family = "Roboto Condensed") +
+  geom_curve(
+   aes(
+      x = 4.5,
+      y = 1.075,
+      xend = 5,
+      yend = 1.025
+    ),
+    colour = "black",
+    linewidth = 0.25,
+    curvature = -0.3,
+    arrow = arrow(length = unit(0.02, "npc"), type = "open"),
+    inherit.aes = FALSE
+  ) +
+  annotate("text", x = 4.5,
+           y = 1.075,
+           hjust = 1,
+           label = "TFP > 1",
+           family = "Roboto Condensed") +
+  labs(x = "Time", y = "Cumulative incidence") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25)) +
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c(1 - (1 - params$cause1$p)^exp(params$cause1$betas), 1)),
+    #label = "F[2](t*'|'*X)",
+    label = "F[2](t ~ '|' ~ X == 1)",
+    family = "Roboto Condensed",
+    parse = TRUE
+  )+
+  annotate(
+    "text",
+    x = 5,
+    y = mean(c(1 - (1 - params$cause1$p)^exp(params$cause1$betas), 0)),
+    label = "F[1](t ~ '|' ~ X == 1)",
+    family = "Roboto Condensed",
+    parse = TRUE
+  )
+
+library(patchwork)
+p_two_fgs <- p_x1 + p_x2 + plot_annotation(tag_levels = 'A')
+
+ggsave(
+  here::here("two_fgs_fig.pdf"), # also to eps/tiff?
+  dpi = 300,
+  #scale = 1.8,
+  units = "in",
+  width = 11,
+  height = 7,
+  device = cairo_pdf
 )
+  #geom_hline(yintercept = params$cause1$p + params$cause2$p, linetype = "dashed") +
+  #geom_hline(yintercept = 1, linetype = "dashed")
+
 
 dat_twofgs[, .(max(cuminc)), by = cause]
 
 melt(
-  data = dat_twofgs,
+  data = dat_twofgs_x1,
   id.vars = c("time", "cause"),
   variable.name = "what",
   value.name = "value"
@@ -172,3 +600,65 @@ melt(
   ggplot(aes(time, value, col = cause)) +
   geom_line(linewidth = 1.5, aes(linetype = cause)) +
   facet_wrap(~ what, scales = "free")
+
+
+
+
+# All-cause ---------------------------------------------------------------
+
+
+
+# With gompertz
+params <- list(
+  "cause1" = list(
+    "formula" = ~ X,
+    "betas" = c(0.5),
+    "base_rate" = 0.5,
+    "base_shape" = -2
+  ),
+  # This is weib for ALL-CAUSE
+  "cause2" = list(
+    "formula" = ~ X,
+    "betas" = c(0.5),
+    "base_rate" = 0.6,
+    "base_shape" = 0.75#0.8# # Could also use Weibs for cause 2
+  )
+)
+
+dat_allcause <- compute_true(
+  t = t,
+  model_type = "all_cause",
+  newdat = newdat,
+  params = params
+)
+
+dat_allcause_x1 <- compute_true(
+  t = t,
+  model_type = "all_cause",
+  newdat = list("X" = 1),
+  params = params
+)
+
+dat_p <- rbind(dat_allcause, dat_allcause_x1, idcol = "X")
+dat_p[, X := factor(X, labels = c(0, 1))]
+
+dat_p_long <- dat_p |>
+  melt(
+    id.vars = c("time", "cause", "X"),
+    variable.name = "what",
+    value.name = "value"
+  )
+
+dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")][what != "cuminc"] |>
+  ggplot(aes(time, ratio, col = what)) +
+  geom_line(linewidth = 1.5, aes(linetype = what)) +
+  facet_wrap(~ cause, scales = "free") +
+  scale_color_manual(values = Manu::get_pal("Kakariki"))
+
+# Baseline tings
+dat_p_long[X == 0] |>
+  ggplot(aes(time, value, col = cause)) +
+  geom_line(linewidth = 1.5, aes(linetype = cause)) +
+  facet_wrap(~ what, scales = "free") +
+  scale_color_manual(values = Manu::get_pal("Kakariki")[-1])# +
+ # coord_cartesian(ylim = c(0, 1))

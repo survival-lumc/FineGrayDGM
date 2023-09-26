@@ -42,6 +42,8 @@ compute_true <- function(t,
   x_cause1 <- modmats[["cause1"]]
   x_cause2 <- modmats[["cause2"]]
 
+  # Use mapply to vectorize down covariates??
+
   if (model_type == "reduction_factor") {
 
     #Try instead with Weib cause 2..
@@ -52,10 +54,13 @@ compute_true <- function(t,
       haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
       cumhaz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")
       cumhaz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+      #cumhaz_cs2 <- 0 # no comp risks
       haz_subdist1 * exp(-cumhaz_subdist1 + cumhaz_cs2)
     }
     num <- integral_fun_cs1(t)
     haz_cs1 <- num / (1 - integrate_to_t(fun = integral_fun_cs1, t = t))
+
+    #uniroot(f = function(t) {integral_fun_cs1(t) / (1 - integrate_to_t(fun = integral_fun_cs1, t = t))}, interval = c(0, 10))
 
     # Now for the CIs
     prod <- function(t, cause) {
@@ -67,13 +72,43 @@ compute_true <- function(t,
       cumhaz_cause1 <- -log(1 - integrate_to_t(fun = integral_fun_cs1, t = t))
       cumhaz_cause2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
       haz * exp(-cumhaz_cause1 - cumhaz_cause2)
-      #exp(-cumhaz_cause1 - cumhaz_cause2) does not go to zero!!
     }
 
+    browser()
+
     # Calculate both cumulative incidences
-    F1 <- integrate_to_t(fun = prod, t = t, cause = 1)
-    F2 <- integrate_to_t(fun = prod, t = t, cause = 2)
+    # Could use just gompertz property to get cumulative incidence?
+    #F1 <- integrate_to_t(fun = prod, t = t, cause = 1)
+    F1 <- 1 - exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+    # F2 <- try(integrate_to_t(fun = prod, t = t, cause = 2))
+    # if (inherits(F2, "try-error")) {
+    #   F2 <- c(
+    #     integrate_to_t(fun = prod, t = t[haz_cs1 > 0], cause = 2),
+    #     rep(NA_real_, length(t[haz_cs1 <= 0]))
+    #   )
+    # }
+
+    # Other way
+    cumhaz_cause2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+    EFS <- (1 - integrate_to_t(fun = integral_fun_cs1, t = t)) * exp(-cumhaz_cause2)
+    F2 <- 1 - EFS - F1
     subdens_2 <- haz_cs2 * (1 - F1 - F2)
+    haz_subdist2 <- subdens_2 / (1 - F2)
+
+  } else if (model_type == "all_cause") {
+
+    #browser()
+
+    haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
+    efs <- exp(-weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+    F1 <- 1 - exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+    haz_cs1 <- haz_subdist1 * (1 - F1) / efs
+    # Watch out for shape!!
+    haz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard") - haz_cs1
+    F2 <- 1 - efs - F1
+    #func <- function(t) integrate_to_t(fun = prod_cause2, t = t)
+    #plot(t, numDeriv::grad(func, x = t))
+    subdens_2 <- haz_cs2 * efs # DENSITY IS HAZARD * SURVIVAL!! NOT DIVIDED!!
     haz_subdist2 <- subdens_2 / (1 - F2)
 
   } else if (model_type == "two_fgs") {
@@ -116,60 +151,8 @@ compute_true <- function(t,
     haz_cs1 <- get_cshaz_twofgs(t, cause = 1)
     haz_cs2 <- get_cshaz_twofgs(t, cause = 2)
 
-    get_cshaz_proper <- function(t, cause) {
-      subdens_1 <- hr_subdist1 * (1 - p1 + p1 * exp(-rate_1 * t^shape_1))^(hr_subdist1 - 1) *
-        p1 * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
-
-      subdens_2 <- hr_subdist2 * (1 - p2 + p2 * exp(-rate_2 * t^shape_2))^(hr_subdist2 - 1) *
-        p2 * exp(-rate_2 * t^shape_2) * rate_2 * shape_2 * t^(shape_2 - 1)
-
-      F1 <- 1 - (1 - p1 * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist1
-      F2 <- 1 - (1 - p2 * (1 - exp(-rate_2 * t^shape_2)))^hr_subdist2
-      if (cause == 1) {
-        # This is reduction factor (would it work both ways?)
-        subdens_1 / (1 - F1 - F2)
-      } else {
-        subdens_2 / (1 - F1 - F2)
-      }
-    }
-
-    prod <- function(t, cause) {
-      haz <- switch(
-        cause,
-        "1" = get_cshaz_proper(t, cause = 1),
-        "2" = get_cshaz_proper(t, cause = 2)
-      )
-      cumhaz_cause1 <- integrate_to_t(t, get_cshaz_proper, cause = 1)
-      cumhaz_cause2 <- integrate_to_t(t, get_cshaz_proper, cause = 2)
-      haz * exp(-cumhaz_cause1 - cumhaz_cause2)
-    }
-
-    # Calculate both cumulative incidences
-    F1_bis <- integrate_to_t(fun = prod, t = t, cause = 1)
-    plot(t, F1)
-    lines(t, F1_bis)
-    F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
-    plot(t, F2)
-    lines(t, F2_bis)
-
-
-
-    haz_subdist1 <- get_subdisthaz_twofgs(t, cause = 1)
-    haz_subdist2 <- get_subdisthaz_twofgs(t, cause = 2)
-
+    # For cure fraction perhaps...
     tfp_suscep <- p1^hr_subdist1 + p2^hr_subdist2 # this is like 1
-
-    # Now for cs hazards.. ask Hein here...
-    # p1^hr_subdist1 + p2^hr_subdist2 is max TFP??
-    # I think it's CS hazards within the fraction?
-    # See vertical model
-    haz_cs1 <- 0 # for now
-    haz_cs2 <- 0
-
-    # Trying stuff
-    #haz_cs1 <- haz_subdist1 * (tfp_suscep - F1) / (tfp_suscep - F1 - F2)
-    #haz_cs2 <- haz_subdist2 * (tfp_suscep - F2) / (tfp_suscep - F1 - F2)
-
 
   } else if (model_type == "squeezing") {
 
@@ -221,6 +204,8 @@ compute_true <- function(t,
     haz_subdist2 <- get_subdisthaz_squeezing(t, cause = 2)
     haz_cs1 <- get_cshaz_squeezing(t, cause = 1)
     haz_cs2 <- get_cshaz_squeezing(t, cause = 2)
+
+    browser()
 
     # FOr testing
     get_cshaz_proper <- function(t, cause) {
