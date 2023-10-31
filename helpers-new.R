@@ -54,41 +54,18 @@ compute_true <- function(t,
       haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
       cumhaz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")
       cumhaz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
-      #cumhaz_cs2 <- 0 # no comp risks
       haz_subdist1 * exp(-cumhaz_subdist1 + cumhaz_cs2)
     }
     num <- integral_fun_cs1(t)
     haz_cs1 <- num / (1 - integrate_to_t(fun = integral_fun_cs1, t = t))
 
+    # To get point at which neg hazards occur
     #uniroot(f = function(t) {integral_fun_cs1(t) / (1 - integrate_to_t(fun = integral_fun_cs1, t = t))}, interval = c(0, 10))
 
-    # Now for the CIs
-    prod <- function(t, cause) {
-      haz <- switch(
-        cause,
-        "1" = integral_fun_cs1(t) / (1 - integrate_to_t(fun = integral_fun_cs1, t = t)),
-        "2" = weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
-      )
-      cumhaz_cause1 <- -log(1 - integrate_to_t(fun = integral_fun_cs1, t = t))
-      cumhaz_cause2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
-      haz * exp(-cumhaz_cause1 - cumhaz_cause2)
-    }
-
-    browser()
-
-    # Calculate both cumulative incidences
-    # Could use just gompertz property to get cumulative incidence?
-    #F1 <- integrate_to_t(fun = prod, t = t, cause = 1)
+    # Cuminc cause 1 easy since Fine-Gray
     F1 <- 1 - exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
-    # F2 <- try(integrate_to_t(fun = prod, t = t, cause = 2))
-    # if (inherits(F2, "try-error")) {
-    #   F2 <- c(
-    #     integrate_to_t(fun = prod, t = t[haz_cs1 > 0], cause = 2),
-    #     rep(NA_real_, length(t[haz_cs1 <= 0]))
-    #   )
-    # }
 
-    # Other way
+    # For cause 2, get EFS first, then subtract it + F1 from 1
     cumhaz_cause2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
     EFS <- (1 - integrate_to_t(fun = integral_fun_cs1, t = t)) * exp(-cumhaz_cause2)
     F2 <- 1 - EFS - F1
@@ -96,8 +73,6 @@ compute_true <- function(t,
     haz_subdist2 <- subdens_2 / (1 - F2)
 
   } else if (model_type == "all_cause") {
-
-    #browser()
 
     haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
     efs <- exp(-weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
@@ -205,7 +180,7 @@ compute_true <- function(t,
     haz_cs1 <- get_cshaz_squeezing(t, cause = 1)
     haz_cs2 <- get_cshaz_squeezing(t, cause = 2)
 
-    browser()
+    #browser()
 
     # FOr testing
     get_cshaz_proper <- function(t, cause) {

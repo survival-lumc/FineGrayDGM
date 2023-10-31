@@ -38,9 +38,9 @@ params <- list(
     "formula" = ~ X,
     "betas" = c(0.5),
     "base_rate" = 0.1, # 0.5 is same spot
-    "base_shape" = -2
+    "base_shape" = -1
   ),
-  # This is weib
+  # This is weib/gomp
   "cause2" = list(
     "formula" = ~ X,
     "betas" = c(0.5),
@@ -48,6 +48,24 @@ params <- list(
     "base_shape" = 2 #-1
   )
 )
+
+# Exponential
+params <- list(
+  "cause1" = list(
+    "formula" = ~ X,
+    "betas" = c(1),
+    "base_rate" = 0.5, # 0.5 is same spot
+    "base_shape" = -1#-2
+  ),
+  # This is weib/gomp
+  "cause2" = list(
+    "formula" = ~ X,
+    "betas" = c(1), # equal to top
+    "base_rate" = 0.5, #also has to be the same as top
+    "base_shape" = 1.1# exponential
+  )
+)
+
 newdat <- list("X" = 0)
 t <- seq(0.001, 10, length.out = 250)
 
@@ -60,8 +78,17 @@ modmats <- lapply(predictor_formulas, function(form) {
 x_cause1 <- modmats[["cause1"]]
 x_cause2 <- modmats[["cause2"]]
 
+# First cuminc
+plot(
+  t,
+  1 - exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+)
+
+plot(seq(0.00001, 10, length.out = 1000),
+     weibull_hazard(seq(0.00001, 10, length.out = 1000), x_cause2, params[["cause2"]], type = "hazard") + 0.5, ylim = c(0, 3))
+
 haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
-plot(t, haz_subdist1, ylim = c(0, 5), type = "l", col = "blue")
+plot(t, haz_subdist1, ylim = c(-1, 1), type = "l", col = "blue")
 haz_cs1 <- gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
 lines(t, haz_cs1)
 lines(t, {
@@ -74,6 +101,108 @@ lines(t, {
       )
     }, x = t)
 })
+
+
+uniroot(f = function(t) {
+  EFS <- (
+    gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") *
+      exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+  ) / gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
+  -log(EFS) - gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+}, interval = c(0.01, 10))
+
+# Other things
+EFS <- (
+  gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") *
+    exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+) / gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
+
+plot(t,
+-log(EFS)
+)
+lines(t, gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard"))
+
+# Look at cumhaz scale
+H2 <- log(gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard")) +
+  gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative") -
+  log(gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")) -
+  gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+
+lines(t, H2)
+lines(t, gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+
+plot(t,
+     log(gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard")) -
+       gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"),
+     ylim = c(-50, 20)
+     )
+
+lines(t,
+      gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")-
+        log(gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard"))
+)
+
+
+# H1
+plot(t, gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+plot(t, H2)
+plot(t, exp(-H2), ylim = c(-1, 3))
+
+plot(t, EFS)#, ylim = c(0, 1))
+
+exp_minH1 <- exp(-gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+
+exp_minH2 <- (
+  gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") *
+    exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+) /
+  (
+    gompertz_hazard(t, x_cause2, params[["cause2"]], type = "hazard") *
+      exp(-gompertz_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+  )
+plot(t, exp_minH2 * exp_minH1)
+
+
+
+
+haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
+plot(t, haz_subdist1, ylim = c(0, 5)) #ylim = c(0, 5), type = "l", col = "blue")
+haz_cs1 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard") + params[["cause1"]]$base_rate
+lines(t, haz_cs1)
+lines(t, {
+  gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") -
+    (weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard") + params[["cause1"]]$base_rate) -
+    grad(function(t) {
+      log(
+        gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") /
+          (weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard") + params[["cause1"]]$base_rate)
+      )
+    }, x = t)
+})
+lines(t,
+      gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") -
+        params[["cause1"]]$base_rate - params[["cause1"]]$base_shape,
+      col = "blue")
+
+plot(t, 1 - exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")))
+
+# Reduction factor
+plot(t, (gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") /2))
+
+# Try a plot efs
+exp_minH1 <- exp(-weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+exp_minH2 <- (
+  gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") *
+    exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+) /
+  (
+    weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard") *
+      exp(-weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+  )
+
+plot(t, exp_minH1 * exp_minH2)
+
+plot(t, log(exp_minH2))
 
 fun_cs2 <- function(t) {
   gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard") -
