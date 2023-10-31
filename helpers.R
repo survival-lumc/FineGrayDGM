@@ -1,4 +1,3 @@
-# Weibull hazard in KM parametrization
 weibull_hazard <- function(t, x, params, type = "hazard") {
   lp <- drop(x %*% params[["betas"]])
   rate <- params[["base_rate"]] * exp(lp)
@@ -9,7 +8,16 @@ weibull_hazard <- function(t, x, params, type = "hazard") {
   }
 }
 
-# Generic function to use for cumulative incidences and cumulative hazards
+gompertz_hazard <- function(t, x, params, type = "hazard") {
+  lp <- drop(x %*% params[["betas"]])
+  rate <- params[["base_rate"]] * exp(lp)
+  if (type == "hazard") {
+    rate * exp(t * params[["base_shape"]])
+  } else { # type == "cumulative" for cumulative hazard
+    (rate / params[["base_shape"]]) * (exp(params[["base_shape"]] * t) - 1)
+  }
+}
+
 integrate_to_t <- Vectorize(FUN = function(t, fun, ...) {
   if (!is.numeric(t) | t < 0) stop("t should be positive.")
   ifelse(
@@ -19,16 +27,13 @@ integrate_to_t <- Vectorize(FUN = function(t, fun, ...) {
   )
 }, vectorize.args = "t")
 
-# Wrapper function for all
-compute_true <- function(t,
-                         what = c("cuminc", "hazard", "cumhazard"),
-                         hazard_type = c("causespec", "subdist"),
-                         cause = 1,
-                         newdat,
-                         params,
-                         model_type = c("correct_FG", "misspec_FG")) {
 
-  # Prepare model matrices (for now newdat is only one row), later vectorize
+# Test ones
+compute_true <- function(t,
+                         model_type = c("squeezing", "reduction_factor", "two_fgs"),
+                         newdat,
+                         params) {
+
   predictor_formulas <- lapply(params, "[[", "formula")
   modmats <- lapply(predictor_formulas, function(form) {
     x <- model.matrix(form, data = newdat)
@@ -37,41 +42,94 @@ compute_true <- function(t,
   x_cause1 <- modmats[["cause1"]]
   x_cause2 <- modmats[["cause2"]]
 
-  if (model_type == "misspec_FG") {
+  # Use mapply to vectorize down covariates??
 
-    # Create closure - we will integrate over this for cumulative incidence
-    prod <- function(t, cause) {
-      haz <- switch(
-        cause,
-        "1" = weibull_hazard(t, x_cause1, params[["cause1"]], type = "hazard"),
-        "2" = weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
-      )
-      cumhaz_cause1 <- weibull_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")
-      cumhaz_cause2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
-      haz * exp(-cumhaz_cause1 - cumhaz_cause2)
-    }
+  if (model_type == "reduction_factor") {
 
-    # Calculate both cumulative incidences
-    F1 <- integrate_to_t(fun = prod, t = t, cause = 1)
-    F2 <- integrate_to_t(fun = prod, t = t, cause = 2)
-
-    # Now we create second closure for subdistribution hazard
-    get_subdisthaz_misspec <- function(t) {
-      haz_cs1 <- weibull_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
-      F1 <- integrate_to_t(fun = prod, t = t, cause = 1)
-      F2 <- integrate_to_t(fun = prod, t = t, cause = 2)
-      haz_cs1 * (1 - F1 - F2) / (1 - F1)
-    }
-
-    # Calculate all hazards
-    haz_cs1 <- weibull_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
+    #Try instead with Weib cause 2..
     haz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard")
-    #cumhaz_cs1 <- weibull_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")
-    #cumhaz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
-    haz_subdist1 <- get_subdisthaz_misspec(t)
-    #cumhaz_subdist1 <- integrate_to_t(fun = get_subdisthaz_misspec, t = t)
+    haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
 
-  } else if (model_type == "correct_FG") {
+    integral_fun_cs1 <- function(t) {
+      haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
+      cumhaz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative")
+      cumhaz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+      haz_subdist1 * exp(-cumhaz_subdist1 + cumhaz_cs2)
+    }
+    num <- integral_fun_cs1(t)
+    haz_cs1 <- num / (1 - integrate_to_t(fun = integral_fun_cs1, t = t))
+
+    # To get point at which neg hazards occur
+    #uniroot(f = function(t) {integral_fun_cs1(t) / (1 - integrate_to_t(fun = integral_fun_cs1, t = t))}, interval = c(0, 10))
+
+    # Cuminc cause 1 easy since Fine-Gray
+    F1 <- 1 - exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+
+    # For cause 2, get EFS first, then subtract it + F1 from 1
+    cumhaz_cause2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
+    EFS <- (1 - integrate_to_t(fun = integral_fun_cs1, t = t)) * exp(-cumhaz_cause2)
+    F2 <- 1 - EFS - F1
+    subdens_2 <- haz_cs2 * (1 - F1 - F2)
+    haz_subdist2 <- subdens_2 / (1 - F2)
+
+  } else if (model_type == "all_cause") {
+
+    haz_subdist1 <- gompertz_hazard(t, x_cause1, params[["cause1"]], type = "hazard")
+    efs <- exp(-weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative"))
+    F1 <- 1 - exp(-gompertz_hazard(t, x_cause1, params[["cause1"]], type = "cumulative"))
+    haz_cs1 <- haz_subdist1 * (1 - F1) / efs
+    # Watch out for shape!!
+    haz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "hazard") - haz_cs1
+    F2 <- 1 - efs - F1
+    #func <- function(t) integrate_to_t(fun = prod_cause2, t = t)
+    #plot(t, numDeriv::grad(func, x = t))
+    subdens_2 <- haz_cs2 * efs # DENSITY IS HAZARD * SURVIVAL!! NOT DIVIDED!!
+    haz_subdist2 <- subdens_2 / (1 - F2)
+
+  } else if (model_type == "two_fgs") {
+
+    # Cause 1
+    hr_subdist1 <- drop(exp(x_cause1 %*% params[["cause1"]][["betas"]]))
+    p1 <- params[["cause1"]][["p"]]
+    shape_1 <- params[["cause1"]][["base_shape"]]
+    rate_1 <- params[["cause1"]][["base_rate"]]
+    F1 <- 1 - (1 - p1 * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist1
+
+    # Cause 2
+    hr_subdist2 <- drop(exp(x_cause2 %*% params[["cause2"]][["betas"]]))
+    p2 <- params[["cause2"]][["p"]]
+    shape_2 <- params[["cause2"]][["base_shape"]]
+    rate_2 <- params[["cause2"]][["base_rate"]]
+    F2 <- 1 - (1 - p2 * (1 - exp(-rate_2 * t^shape_2)))^hr_subdist2
+
+    subdens_1 <- hr_subdist1 * (1 - p1 + p1 * exp(-rate_1 * t^shape_1))^(hr_subdist1 - 1) *
+      p1 * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
+
+    subdens_2 <- hr_subdist2 * (1 - p2 + p2 * exp(-rate_2 * t^shape_2))^(hr_subdist2 - 1) *
+      p2 * exp(-rate_2 * t^shape_2) * rate_2 * shape_2 * t^(shape_2 - 1)
+
+    get_subdisthaz_twofgs <- function(t, cause) {
+      if (cause == 1) {
+        subdens_1 / (1 - F1)
+      } else subdens_2 / (1 - F2)
+    }
+
+    get_cshaz_twofgs <- function(t, cause) { # use switch??
+      if (cause == 1) {
+        # Would reduction factor  work both ways?)
+        subdens_1 / (1 - F1 - F2) # check for floating point issues?
+      } else subdens_2 / (1 - F1 - F2)
+    }
+
+    haz_subdist1 <- get_subdisthaz_twofgs(t, cause = 1)
+    haz_subdist2 <- get_subdisthaz_twofgs(t, cause = 2)
+    haz_cs1 <- get_cshaz_twofgs(t, cause = 1)
+    haz_cs2 <- get_cshaz_twofgs(t, cause = 2)
+
+    # For cure fraction perhaps...
+    tfp_suscep <- p1^hr_subdist1 + p2^hr_subdist2 # this is like 1
+
+  } else if (model_type == "squeezing") {
 
     # Calculate cumulative incidences directly - here for cause 1
     hr_subdist <- drop(exp(x_cause1 %*% params[["cause1"]][["betas"]]))
@@ -88,37 +146,90 @@ compute_true <- function(t,
     cumhaz_condit <- rate_2 * hr_condit * t^shape_2
     F2 <- (1 - exp(-cumhaz_condit)) * p2_inf
 
+    #library(numDeriv)
+    #F1_fun <- function(t) {
+    #  1 - (1 - p * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist
+    #}
+    #plot(t, grad(func = F1_fun, t))
+
+
     # Closure for subdistribution hazard in this mechanism
-    get_subdisthaz_correct <- function(t) {
-      nom <- p * shape_1 * rate_1 * exp(-rate_1 * t^shape_1) * t^(shape_1 - 1)
-      denom <- 1 - p * (1 - exp(-rate_1 * t^shape_1))
-      hr_subdist * nom / denom
+    subdens_1 <- hr_subdist * (1 - p + p * exp(-rate_1 * t^shape_1))^(hr_subdist - 1) *
+      p * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
+
+    subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) *
+      exp(-hr_condit * rate_2 * t^shape_2) *
+      p2_inf # important
+
+    # Use switch!!
+    get_subdisthaz_squeezing <- function(t, cause) {
+      if (cause == 1) {
+        subdens_1 / (1 - F1)
+      } else subdens_2 / (1 - F2)
     }
 
-    get_cshaz_correct <- function(t, cause) {
-      F1 <- 1 - (1 - p * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist
-      cumhaz_condit <- rate_2 * hr_condit * t^shape_2
-      F2 <- (1 - exp(-cumhaz_condit)) * p2_inf
+    get_cshaz_squeezing <- function(t, cause) { # use switch??
       if (cause == 1) {
-        get_subdisthaz_correct(t) * (1 + F2 / (1 - F1 - F2)) # check for floating point issues?
+        # Would reduction factor  work both ways?)
+        subdens_1 / (1 - F1 - F2) # check for floating point issues?
+      } else subdens_2 / (1 - F1 - F2)
+    }
+
+    haz_subdist1 <- get_subdisthaz_squeezing(t, cause = 1)
+    haz_subdist2 <- get_subdisthaz_squeezing(t, cause = 2)
+    haz_cs1 <- get_cshaz_squeezing(t, cause = 1)
+    haz_cs2 <- get_cshaz_squeezing(t, cause = 2)
+
+    #browser()
+
+    # FOr testing
+    get_cshaz_proper <- function(t, cause) {
+      subdens_1 <- hr_subdist * (1 - p + p * exp(-rate_1 * t^shape_1))^(hr_subdist - 1) *
+        p * exp(-rate_1 * t^shape_1) * rate_1 * shape_1 * t^(shape_1 - 1)
+      subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) *
+        exp(-hr_condit * rate_2 * t^shape_2) *
+        p2_inf
+      F1 <- 1 - (1 - p * (1 - exp(-rate_1 * t^shape_1)))^hr_subdist
+      F2 <- (1 - exp(-rate_2 * hr_condit * t^shape_2)) * p2_inf
+      if (cause == 1) {
+        # This is reduction factor (would it work both ways?)
+        subdens_1 / (1 - F1 - F2)
       } else {
-        subdens_2 <- hr_condit * rate_2 * shape_2 * t^(shape_2 - 1) * exp(-hr_condit * rate_2 * t^shape_2)
-        subdens_2 * (1 - F1 - F2)
+        subdens_2 / (1 - F1 - F2)
       }
     }
 
-    haz_subdist1 <- get_subdisthaz_correct(t)
-    haz_cs1 <- get_cshaz_correct(t, cause = 1)
-    haz_cs2 <- get_cshaz_correct(t, cause = 2)
+    prod <- function(t, cause) {
+      haz <- switch(
+        cause,
+        "1" = get_cshaz_proper(t, cause = 1),
+        "2" = get_cshaz_proper(t, cause = 2)
+      )
+      cumhaz_cause1 <- integrate_to_t(t, get_cshaz_proper, cause = 1)
+      cumhaz_cause2 <- integrate_to_t(t, get_cshaz_proper, cause = 2)
+      haz * exp(-cumhaz_cause1 - cumhaz_cause2)
+    }
+
+    # Calculate both cumulative incidences
+    #F1_bis <- integrate_to_t(fun = prod, t = t, cause = 1)
+    #F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
   }
 
-  # Sort out what to return now
-  data.table(
+  # Return everything; do long format?
+  dat_ev1 <- data.table(
     "time" = t,
-    "cuminc_1" = F1,
-    "cuminc_2" = F2,
-    haz_subdist1,
-    haz_cs1,
-    haz_cs2
+    "cause" = "1",
+    "cuminc" = F1,
+    "subdist_haz" = haz_subdist1,
+    "cs_haz" = haz_cs1
   )
+  dat_ev2 <- data.table(
+    "time" = t,
+    "cause" = "2",
+    "cuminc" = F2,
+    "subdist_haz" = haz_subdist2,
+    "cs_haz" = haz_cs2
+  )
+  rbind(dat_ev1, dat_ev2)
 }
+
