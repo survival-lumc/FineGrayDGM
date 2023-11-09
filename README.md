@@ -20,7 +20,7 @@ be used in settings where multiple competing events are of scientific
 interest, where it is specified for each cause in turn. In this work, we
 provide an overview of data-generating mechanisms where proportional
 subdistribution hazards hold for at least one cause. We use these to
-motivate why the use of multiple Fine-Gray models should be reconsidered
+motivate why the use of multiple Fine–Gray models should be reconsidered
 in favour of better alternatives.
 
 ## Usage
@@ -29,3 +29,12 @@ Two main files are of interest:
 
 - [main.R](./main.R) - something something manuscript figs.
 - [helpers.R](./helpers.R) - something something.
+
+## Ideas for further extension
+
+- Generalize functions to accommodate user-defined hazard or cumulative
+  distribution functions, and vectorize covariate input.
+
+- Create a shiny app to automate plot creation for different
+  parametrizations, and show when the total failure probablity exceeds
+  one/cause-specific hazards become negative.

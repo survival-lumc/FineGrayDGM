@@ -34,36 +34,13 @@ Studies considering competing risks will often aim to estimate the cumulative in
 
 Two main files are of interest:
 
-- [main.R](./main.R) - something something manuscript figs.
-- [helpers.R](./helpers.R) - something something.
+- [`manuscript-figures.R`](./manuscript-figures.R) - R script to reproducte the figures in the manuscript.
+- [`helpers.R`](./helpers.R) - helper functions that `manuscript-figures.R` relies on to compute true cumulative incidence function, cause-specific hazards, and subdistribution hazards, for both events.
 
-```{r tree-test, comment=NA, eval=FALSE, echo=FALSE}
-.
-├── analysis
-│   ├── illustrative-example.R
-│   ├── review-analysis.R
-│   └── zotero-to-extaction-sheet.R
-├── data
-│   └── imps_all.rds
-├── data-raw
-│   ├── 2022-09-06_ris.ris
-│   ├── dat-mds_admin-cens.fst
-│   ├── data_dictionary.rda
-│   ├── extraction-sheet.xlsx
-│   └── literature-database-raw.csv
-├── figures
-│   └── journals-overview.svg
-├── hema-missing-review.Rproj
-├── R
-│   └── forest-helper.R
-├── README.md
-└── README.Rmd
-```
+(R env bit here)
 
-```{r tree-example, comment=NA, eval=FALSE, echo=FALSE}
-# Or paste as test after
-#fs::dir_tree(
-#  regexp = "\\.html$|\\.Rmd$|\\.Rproj$|imgs|libs|old|css|slides", 
-#  invert = TRUE
-#)
-```
+## Ideas for further extension
+
+- Generalize functions to accommodate user-defined hazard or cumulative distribution functions, and vectorize covariate input.
+
+- Create a shiny app to automate plot creation for different parametrizations, and show when the total failure probability exceeds one/cause-specific hazards become negative.
