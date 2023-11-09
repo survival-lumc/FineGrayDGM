@@ -456,14 +456,9 @@ p_twofgs_x1 <- dat_twofgs_x1[cause == 1] |>
     alpha = 0.5
   ) +
   coord_cartesian(ylim = c(0, 1.1), xlim = c(0, 11)) +
-  geom_segment(
-    y = p1_x,
-    yend = p1_x,
-    x = 0,
-    xend = 10,
-    linetype = "dashed"
-  ) +
-  annotate("text",
+  geom_segment(y = p1_x, yend = p1_x, x = 0, xend = 10, linetype = "dashed") +
+  annotate(
+    "text",
     x = 10.05,
     y = p1_x,
     parse = TRUE,
@@ -479,7 +474,8 @@ p_twofgs_x1 <- dat_twofgs_x1[cause == 1] |>
     arrow = arrow(length = unit(0.02, "npc"), type = "open"),
     inherit.aes = FALSE
   ) +
-  annotate("text",
+  annotate(
+    "text",
     x = 4.5,
     y = 1.075,
     hjust = 1,
