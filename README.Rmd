@@ -44,3 +44,5 @@ Two main files are of interest:
 - Generalize functions to accommodate user-defined hazard or cumulative distribution functions, and vectorize covariate input.
 
 - Create a shiny app to automate plot creation for different parametrizations, and show when the total failure probability exceeds one/cause-specific hazards become negative.
+
+- Make functions allowing user to actually simulate data (instead of just checking the true values).
