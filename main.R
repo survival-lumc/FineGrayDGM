@@ -193,17 +193,12 @@ dat_p_long <- melt.data.table(
   value.name = "value"
 )
 
-
-
-
-dat_p[X == 1][, .(sum(cuminc)), by = time]
-
 # Try similar plots
-dat_p[, TFP := sum(cuminc), by = c("X", "time")] #[X == 1][, .(tfp = sum(cuminc),), by = time]
+dat_p[, TFP := sum(cuminc), by = c("X", "time")]
 dat_p[, cause := factor(cause, levels = c(2, 1))]
 
 # P(D = 1 | X)
-p1_x <-
+p1_x <- 1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas)
 
 p_reduct_1 <- dat_p[X == 1 & TFP <= 1] |>
   ggplot(aes(time, cuminc, fill = cause)) +
@@ -212,10 +207,7 @@ p_reduct_1 <- dat_p[X == 1 & TFP <= 1] |>
   annotate(
     "text",
     x = 2,
-    # What is this??
-    y = mean(c((1 - exp(params$cause1$base_rate /
-                          params$cause1$base_shape)^exp(params$cause1$betas)),
-               1)),
+    y = mean(c(p1_x, 1)),
     label = "F[2](t ~ '|' ~ X == 1)",
     family = "Roboto Condensed",
     parse = TRUE
@@ -223,10 +215,7 @@ p_reduct_1 <- dat_p[X == 1 & TFP <= 1] |>
   annotate(
     "text",
     x = 2,
-    y = mean(c(
-      0,
-      (1 - exp(params$cause1$base_rate / params$cause1$base_shape)^exp(params$cause1$betas))
-    )),
+    y = mean(c(0, p1_x)),
     label = "F[1](t ~ '|' ~ X == 1)",
     family = "Roboto Condensed",
     parse = TRUE
@@ -237,6 +226,7 @@ p_reduct_1 <- dat_p[X == 1 & TFP <= 1] |>
   scale_y_continuous(breaks = seq(0, 1, by = 0.25)) +
   theme(legend.position = "none")
 
+# Get (approximately) time point at which hazards become negative
 t_neg_haz <- min(dat_p[cs_haz < 0, "time"])
 dat_p[, grps := fcase(
   time < t_neg_haz & X == 1 & cause == 1, 1,
@@ -319,24 +309,24 @@ ggsave(
 params <- list(
   "cause1" = list(
     "formula" = ~ X,
-    "betas" = c(0.5),
-    "p" = 0.25,#0.05,
-    "base_rate" = 1,
-    "base_shape" = 0.75
+    "betas" = c(0.5), # beta_1
+    "p" = 0.25, # p_10
+    "base_shape" = 0.75, # a_1
+    "base_rate" = 1 # b_1
   ),
   "cause2" = list(
-    "formula" = ~ X,
+    "formula" = ~ X, # beta_2
     "betas" = c(0.5),
-    "p" = 0.5, #0.1,
-    "base_rate" = 1,
-    "base_shape" = 0.75
+    "p" = 0.5, # p_20
+    "base_shape" = 0.75, # a_2
+    "base_rate" = 1 # b2
   )
 )
 
 dat_twofgs <- compute_true(
   t = t,
   model_type = "two_fgs",
-  newdat = newdat,
+  newdat = list(X = 0),
   params = params
 )
 
@@ -470,89 +460,15 @@ p_x2 <-dat_twofgs_x1[cause == 1] |>
     parse = TRUE
   )
 
-library(patchwork)
-p_two_fgs <- p_x1 + p_x2 + plot_annotation(tag_levels = 'A')
+# Figure 3
+p_x1 + p_x2 + plot_annotation(tag_levels = 'A')
 
 ggsave(
   here::here("two_fgs_fig.pdf"), # also to eps/tiff?
   dpi = 300,
-  #scale = 1.8,
   units = "in",
   width = 11,
   height = 7,
   device = cairo_pdf
 )
 
-dat_twofgs[, .(max(cuminc)), by = cause]
-
-melt(
-  data = dat_twofgs_x1,
-  id.vars = c("time", "cause"),
-  variable.name = "what",
-  value.name = "value"
-) |>
-  ggplot(aes(time, value, col = cause)) +
-  geom_line(linewidth = 1.5, aes(linetype = cause)) +
-  facet_wrap(~ what, scales = "free")
-
-
-
-
-# All-cause ---------------------------------------------------------------
-
-
-
-# With gompertz
-params <- list(
-  "cause1" = list(
-    "formula" = ~ X,
-    "betas" = c(0.5),
-    "base_rate" = 0.5,
-    "base_shape" = -2
-  ),
-  # This is weib for ALL-CAUSE
-  "cause2" = list(
-    "formula" = ~ X,
-    "betas" = c(-0.25),
-    "base_rate" = 0.5,
-    "base_shape" = 0.75#0.8# # Could also use Weibs for cause 2
-  )
-)
-
-dat_allcause <- compute_true(
-  t = t,
-  model_type = "all_cause",
-  newdat = newdat,
-  params = params
-)
-
-dat_allcause_x1 <- compute_true(
-  t = t,
-  model_type = "all_cause",
-  newdat = list("X" = 1),
-  params = params
-)
-
-dat_p <- rbind(dat_allcause, dat_allcause_x1, idcol = "X")
-dat_p[, X := factor(X, labels = c(0, 1))]
-
-dat_p_long <- dat_p |>
-  melt(
-    id.vars = c("time", "cause", "X"),
-    variable.name = "what",
-    value.name = "value"
-  )
-
-dat_p_long[, .(ratio = value[X == 1] / value[X == 0]), by = c("time", "cause", "what")][what != "cuminc"] |>
-  ggplot(aes(time, ratio, col = what)) +
-  geom_line(linewidth = 1.5, aes(linetype = what)) +
-  facet_wrap(~ cause, scales = "free") +
-  scale_color_manual(values = Manu::get_pal("Kakariki"))
-
-# Baseline tings
-dat_p_long[X == 1] |>
-  ggplot(aes(time, value, col = cause)) +
-  geom_line(linewidth = 1.5, aes(linetype = cause)) +
-  facet_wrap(~ what, scales = "free") +
-  scale_color_manual(values = Manu::get_pal("Kakariki")[-1])# +
- # coord_cartesian(ylim = c(0, 1))
