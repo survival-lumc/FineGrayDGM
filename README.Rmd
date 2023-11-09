@@ -37,7 +37,11 @@ Two main files are of interest:
 - [`manuscript-figures.R`](./manuscript-figures.R) - R script to reproducte the figures in the manuscript.
 - [`helpers.R`](./helpers.R) - helper functions that `manuscript-figures.R` relies on to compute true cumulative incidence function, cause-specific hazards, and subdistribution hazards, for both events.
 
-(R env bit here)
+The R environment can be reproduced using [`{renv}`](https://github.com/rstudio/renv/), by calling
+
+```{r renv, echo=TRUE, eval=FALSE}
+renv::restore()
+```
 
 ## Ideas for further extension
 

@@ -34,7 +34,12 @@ Two main files are of interest:
   function, cause-specific hazards, and subdistribution hazards, for
   both events.
 
-(R env bit here)
+The R environment can be reproduced using
+[`{renv}`](https://github.com/rstudio/renv/), by calling
+
+``` r
+renv::restore()
+```
 
 ## Ideas for further extension
 
