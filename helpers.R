@@ -215,7 +215,7 @@ compute_true <- function(t,
     #F2_bis <- integrate_to_t(fun = prod, t = t, cause = 2)
   }
 
-  # Return everything; do long format?
+  # Return everything in long format?
   dat_ev1 <- data.table(
     "time" = t,
     "cause" = "1",
@@ -232,4 +232,3 @@ compute_true <- function(t,
   )
   rbind(dat_ev1, dat_ev2)
 }
-
