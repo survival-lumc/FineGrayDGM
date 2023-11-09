@@ -27,8 +27,14 @@ in favour of better alternatives.
 
 Two main files are of interest:
 
-- [main.R](./main.R) - something something manuscript figs.
-- [helpers.R](./helpers.R) - something something.
+- [`manuscript-figures.R`](./manuscript-figures.R) - R script to
+  reproducte the figures in the manuscript.
+- [`helpers.R`](./helpers.R) - helper functions that
+  `manuscript-figures.R` relies on to compute true cumulative incidence
+  function, cause-specific hazards, and subdistribution hazards, for
+  both events.
+
+(R env bit here)
 
 ## Ideas for further extension
 
@@ -36,5 +42,5 @@ Two main files are of interest:
   distribution functions, and vectorize covariate input.
 
 - Create a shiny app to automate plot creation for different
-  parametrizations, and show when the total failure probablity exceeds
+  parametrizations, and show when the total failure probability exceeds
   one/cause-specific hazards become negative.
