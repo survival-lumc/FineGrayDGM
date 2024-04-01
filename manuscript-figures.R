@@ -150,7 +150,7 @@ p_reduct_2 <- dat_reduc[X == 1] |>
     arrow = arrow(length = unit(0.02, "npc"), type = "open"),
     inherit.aes = FALSE
   ) +
-  scale_linetype_manual(values = c(2, 1))
+  scale_linetype_manual(values = c(4, 1))
 
 # Panel C
 p_reduct_3 <- dat_reduc_long[, .(
@@ -168,7 +168,7 @@ p_reduct_3 <- dat_reduc_long[, .(
     linetype = "Cause"
   ) +
   scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
-  scale_linetype_manual(values = c(2, 1))
+  scale_linetype_manual(values = c(4, 1))
 
 # Figure 1
 p_reduct_1 / p_reduct_2 / p_reduct_3 + plot_annotation(tag_levels = "A")
@@ -254,7 +254,7 @@ p_squeeze_cs <- dat_squeeze[X == 0] |>
     linetype = "Cause"
   ) +
   scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
-  scale_linetype_manual(values = c(2, 1))
+  scale_linetype_manual(values = c(4, 1))
 
 # Panel C
 p_squeeze_subdist <- dat_squeeze[X == 0] |>
@@ -269,7 +269,7 @@ p_squeeze_subdist <- dat_squeeze[X == 0] |>
     linetype = "Cause"
   ) +
   scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
-  scale_linetype_manual(values = c(2, 1))
+  scale_linetype_manual(values = c(4, 1))
 
 # Compute hazard ratios (X = 1 vs X = 0) for remaining two panels
 hr_dat <- dat_squeeze_long[, .(
@@ -290,7 +290,7 @@ p_squeeze_cshr <- hr_dat[what == "cs_haz"] |>
     linetype = "Cause"
   ) +
   scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
-  scale_linetype_manual(values = c(2, 1))
+  scale_linetype_manual(values = c(4, 1))
 
 # Panel D
 p_squeeze_subdisthr <- hr_dat[what == "subdist_haz"] |>
@@ -306,7 +306,7 @@ p_squeeze_subdisthr <- hr_dat[what == "subdist_haz"] |>
     linetype = "Cause"
   ) +
   scale_x_continuous(breaks = seq(0, 10, by = 2.5)) +
-  scale_linetype_manual(values = c(2, 1))
+  scale_linetype_manual(values = c(4, 1))
 
 combined <- (p_squeeze_cs + p_squeeze_cshr) /
   (p_squeeze_subdist + p_squeeze_subdisthr) & theme(legend.position = "bottom")

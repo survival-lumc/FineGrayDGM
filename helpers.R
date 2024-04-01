@@ -74,6 +74,8 @@ compute_true <- function(t,
       cumhaz_cs2 <- weibull_hazard(t, x_cause2, params[["cause2"]], type = "cumulative")
       haz_subdist1 * exp(-cumhaz_subdist1 + cumhaz_cs2)
     }
+
+    # (! TO DO) Evaluate integrate_to_t(fun = integral_fun_cs1, t = t) only once!!
     num <- integral_fun_cs1(t)
     haz_cs1 <- num / (1 - integrate_to_t(fun = integral_fun_cs1, t = t)) # Formula (2)
 
