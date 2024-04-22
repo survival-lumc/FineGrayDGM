@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# A data-generation perspective on the use of multiple Fine–Gray models
+# Why you should avoid using multiple Fine–Gray models: insights from (attempts at) simulating proportional subdistribution hazards data
 
 <!-- badges: start -->
 <!-- See hema review example-->
@@ -20,8 +20,8 @@ be used in settings where multiple competing events are of scientific
 interest, where it is specified for each cause in turn. In this work, we
 provide an overview of data-generating mechanisms where proportional
 subdistribution hazards hold for at least one cause. We use these to
-motivate why the use of multiple Fine–Gray models should be reconsidered
-in favour of better alternatives.
+motivate why the use of multiple Fine–Gray models should be avoided in
+favour of better alternatives such as cause-specific hazard models.
 
 ## Usage
 
@@ -30,9 +30,9 @@ Two main files are of interest:
 - [`manuscript-figures.R`](./manuscript-figures.R) - R script to
   reproducte the figures in the manuscript.
 - [`helpers.R`](./helpers.R) - helper functions that
-  `manuscript-figures.R` relies on to compute true cumulative incidence
-  function, cause-specific hazards, and subdistribution hazards, for
-  both events.
+  [`manuscript-figures.R`](./manuscript-figures.R) relies on to compute
+  true cumulative incidence function, cause-specific hazards, and
+  subdistribution hazards, for both events.
 
 The R environment can be reproduced using
 [`{renv}`](https://github.com/rstudio/renv/), by calling
