@@ -513,3 +513,13 @@ ggsave(
   height = 7,
   device = cairo_pdf
 )
+
+ggsave(
+  here::here("two_fgs_fig.png"), # also to eps/tiff?
+  dpi = 300,
+  units = "in",
+  width = 11,
+  height = 7,
+  bg = "white"
+  #device = cairo_png
+)
