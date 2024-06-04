@@ -4,7 +4,8 @@
 # Why you should avoid using multiple Fine–Gray models: insights from (attempts at) simulating proportional subdistribution hazards data
 
 <!-- badges: start -->
-<!-- See hema review example-->
+
+[![DOI:10.1093/jrsssa/qnae056](https://zenodo.org/badge/DOI/10.1093/jrsssa/qnae056.svg)](https://doi.org/10.1093/jrsssa/qnae056)
 <!-- badges: end -->
 
 **Authors**: Edouard F. Bonneville, Liesbeth C. de Wreede, and Hein
